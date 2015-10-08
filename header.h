@@ -21,7 +21,7 @@ struct addrinfo {
 };
 
 struct frame {
-    short       seq_num;
+    uint16_t    seq_num;
     char        frame_type;
     char        eop;
     char        datafield[130];
@@ -34,6 +34,6 @@ FILE *f;
 void DieWithSystemMessage(char *errorMessage);  /* Error handling function */
 void ReadPhotoFile();
 void ConnectToServer(char *);
-void CreateFrame(char[], int);
+void CreateFrame(char*, int, int);
 int SendFrame(struct frame, int);
 void CalculateError(char *, char *);

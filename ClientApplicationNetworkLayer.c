@@ -8,6 +8,11 @@
 #include <sys/time.h>
 #include "header.h"
 
+extern int total_frames_sent;
+extern int total_retransmitted_frames;
+extern int total_good_acks;
+extern int total_bad_acks;
+
 int main(int argc, char *argv[])
 {
     char *hostname;                  /* Machine Hostname */
@@ -40,7 +45,9 @@ int main(int argc, char *argv[])
     }
 
     gettimeofday(&end, NULL);
-    // printf("Total transfer time: ")
+    /* printf("Total transfer time: %d ms.\n", (end.tv_sec * 1000 + end.tv_usec / 1000) - 
+                                                 (start.tv_sec * 1000 + start.tv_usec / 1000)); */
+    fprintf(f, "Total frames sent: %d\nTotal number of frames retransmitted: %d\nTotal number of good ACKs: %d\nTotal number of ACKs with errors: %d\n");
     fclose(f);
     exit(0);
 }
@@ -63,12 +70,8 @@ void ReadPhotoFile()
     }
 
     while((photo_size = read(photo_file, photo_buffer, 256)) > 0) {
-        fprintf(f, "Sent packet #%d\n", i);
-        CreateFrame(photo_buffer, photo_size);
-        //Deposit into payload
-        //Put EOP indicator
-        //Send to DataLink layer
-        //Wait for network layer ACK
+        fprintf(f, "Packet #%d sent\n", i);
+        CreateFrame(photo_buffer, photo_size, i);
         i++;
         break;
     }
