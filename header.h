@@ -1,8 +1,3 @@
-/* Sam La 9/11/2015
- * sla@wpi.edu, CS3516 prog2
- * This is the header file for function
- */
-
 #include <sys/socket.h> /* for socket(), connect(), send(), and recv() */
 #include <stdio.h>
 #include <stdlib.h>     /* for atoi() and exit() */
@@ -26,11 +21,11 @@ struct addrinfo {
 };
 
 struct frame {
-	short       seq_num;
-	char        frame_type;
+    short       seq_num;
+    char        frame_type;
     char        eop;
     char        datafield[130];
-    short       ed;          
+    char        ed[2];          
 
 };
 
@@ -41,3 +36,4 @@ void ReadPhotoFile();
 void ConnectToServer(char *);
 void CreateFrame(char[], int);
 int SendFrame(struct frame, int);
+void CalculateError(char *, char *);

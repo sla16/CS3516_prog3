@@ -5,6 +5,7 @@
 #include <string.h>     /* for memset() */
 #include <unistd.h>     /* for close() */
 #include <fcntl.h>      /* File Header */
+#include <sys/time.h>
 #include "header.h"
 
 int main(int argc, char *argv[])
@@ -14,6 +15,7 @@ int main(int argc, char *argv[])
     int client_id;                   /* Unique Integer for identifying this client */
     int num_photos;                  /* Number of photos client wants to upload */
     char save_path[50];              /* File path to log to */
+    struct timeval start, end;       /* Used for timing the photo transfer */
 
     if (argc != 4)    /* Test for correct number of arguments */
     {
@@ -26,6 +28,8 @@ int main(int argc, char *argv[])
     num_photos = atoi(argv[3]);                     /* Third arg: number of photos */
     sprintf(save_path, "client_%d.log", client_id); /* Log path */
 
+    gettimeofday(&start, NULL);                     /* Start timer */
+
     ConnectToServer(hostname);                      /* Physical Layer connect */
     f = fopen(save_path, "w");
 
@@ -35,6 +39,9 @@ int main(int argc, char *argv[])
         //Close connection when all done
     }
 
+    gettimeofday(&end, NULL);
+    // printf("Total transfer time: ")
+    fclose(f);
     exit(0);
 }
 

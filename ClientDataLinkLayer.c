@@ -15,8 +15,8 @@
  */
 void CreateFrame(char photo_buffer[], int photo_size)
 {
-	int bytes_used, resend_frame = 0;
-	short frame_seq_num = 0;
+	int bytes_used = 0, resend_frame = 0;
+	short frame_seq_num = 33;
 	int i = -1;
 	struct frame Frame;
 	memset(&Frame, 0, sizeof(Frame)); /* Zero out structure */
@@ -24,18 +24,17 @@ void CreateFrame(char photo_buffer[], int photo_size)
 	while(photo_size > 0) {
 		/* Construct the frame for transmission */
 		if(resend_frame != 1) {
+			i++;
 			Frame.seq_num = frame_seq_num;
-			Frame.frame_type = '0';			/* ? */
+			Frame.frame_type = '0';			/* 0 for frame, 1 for frame ack, 2 for packet ack */
+			/* 1 for EOP, 0 otherwise */
+			if(photo_size <= 0) 
+				Frame.eop = 'y';
+			else
+				Frame.eop = 'n';
 			strncpy(Frame.datafield, photo_buffer + bytes_used, 130);
 			bytes_used = bytes_used + 130;
 			photo_size = photo_size - 130;
-			/* ? */
-			if(photo_size <= 0) 
-				Frame.eop = '1';
-			else
-				Frame.eop = '0';
-			Frame.ed = 0;		/* ? */
-			i++;
 		}
 		fprintf(f, "Frame #%d sent\n", i);
 		/* To physical layer */

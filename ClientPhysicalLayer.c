@@ -8,7 +8,7 @@
 #include <stdlib.h>     /* for atoi() and exit() */
 #include <string.h>     /* for memset() */
 #include <unistd.h>     /* for close() */
-#include <fcntl.h>		/* File header */
+#include <fcntl.h>      /* File header */
 #include <sys/time.h>
 #include "header.h"
 
@@ -21,16 +21,16 @@ int sockfd;
  */
 void ConnectToServer(char *hostname)
 {
-	int sock, flags;                        /* Socket descriptor */
+    int sock, flags;                        /* Socket descriptor */
     struct addrinfo *p;              /* Struct of the addrinfo for hostname */
     struct timeval timeout;
-	int rtnVal;
+    int rtnVal;
 
     /* Sets 1 second timeout */
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
 
-	// Tell the system what kind(s) of address info we want
+    // Tell the system what kind(s) of address info we want
     struct addrinfo addrCriteria;                   // Criteria for address match
     memset(&addrCriteria, 0, sizeof(addrCriteria)); // Zero out structure
     addrCriteria.ai_family = AF_UNSPEC;             // Any address family
@@ -41,7 +41,7 @@ void ConnectToServer(char *hostname)
     struct addrinfo *addrList;                      // Holder for list of addresses returned
 
     // Use the default port 5000 as a check if no port was actually given
-    if ((rtnVal = getaddrinfo(hostname, "5000", &addrCriteria, &addrList)) != 0)
+    if ((rtnVal = getaddrinfo(hostname, "5001", &addrCriteria, &addrList)) != 0)
     {
         DieWithUserMessage("getaddrinfo() failed", gai_strerror(rtnVal));
     }
@@ -89,23 +89,26 @@ void ConnectToServer(char *hostname)
  */
 int SendFrame(struct frame Frame, int frame_num)
 {
-    char buffer[136];
+    unsigned char buffer[136];
+    unsigned char buffer2[136];
+    char seq_num[2];
+    char error[2] = {0, 0};
+    char temp[2];
     int i = 0;
     int bufferLen, recvSize;
+    printf("--%X--", Frame.seq_num);
+    memcpy(seq_num, &Frame.seq_num, sizeof(short));
+    memcpy(buffer2, seq_num, sizeof(seq_num));
+    sprintf(buffer2+2, "%c%c%s", Frame.frame_type, Frame.eop, Frame.datafield);
+    CalculateError(buffer2, error);
+    sprintf(buffer+134, "%c%c", error[0], error[1]);
 
-    memcpy(buffer, &Frame.seq_num, sizeof(Frame.seq_num));
-    i+=2;
-    memcpy(buffer + i++, &Frame.frame_type, 1);
-    memcpy(buffer + i++, &Frame.eop, 1);
-    memcpy(buffer + i, Frame.datafield, 130);
-    i+= 130;
-    memcpy(buffer + i, &Frame.ed, 1);
+    bufferLen = strlen(buffer2);
 
-    // sprintf(buffer, "%2d%c%c%s%d", Frame.seq_num, Frame.frame_type, Frame.eop, Frame.datafield, Frame.ed);
-    printf("%s", buffer);
-    bufferLen = strlen(buffer);
+    printf("%s", buffer2);
+    fflush(stdout);
     
-    if (send(sockfd, buffer, bufferLen, 0) != bufferLen)
+    if (send(sockfd, buffer2, bufferLen, 0) != bufferLen)
         DieWithSystemMessage("send() sent a different number of bytes than expected");
 
     while(1){
@@ -123,5 +126,22 @@ int SendFrame(struct frame Frame, int frame_num)
             return 1;           /* frame ack */
             // return 2;        /* network ack */
         }
+    }
+}
+
+/*
+ * XOR the buffer content to get error detection
+ */
+void CalculateError(char *buffer, char *error)
+{
+    // LOOK INTO 135
+    int i;
+    for (i = 0; i < 135; i+=2)
+    {
+        error[0] ^= buffer[i];
+    }
+    for (i = 1; i < 135; i+=2)
+    {
+        error[1] ^= buffer[i];
     }
 }
