@@ -4,6 +4,11 @@
 #include <string.h>     /* for memset() */
 
 #define RCVBUFSIZE 200  /* Size of receive buffer */
+#define EOPacket '1'
+#define EOPhoto '2'
+#define DATA_FRAME '0'
+#define FRAME_ACK '1'
+#define PACKET_ACK '2'
 
 /*
  * This struct is to hold all the information
@@ -32,8 +37,8 @@ struct frame {
 FILE *f;
 
 void DieWithSystemMessage(char *errorMessage);  /* Error handling function */
-void ReadPhotoFile();
+void ReadPhotoFile(int, int);
 void ConnectToServer(char *);
 void CreateFrame(char*, int, int);
-int SendFrame(struct frame, int);
-void CalculateError(char *, char *);
+int SendFrame(struct frame, int, int);
+void CalculateError(char *, char *, int);

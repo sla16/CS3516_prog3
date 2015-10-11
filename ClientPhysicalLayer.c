@@ -1,7 +1,3 @@
-// 0 for data frame
-// 1 for frame ack
-// 2 for packet ack
-
 #include <stdio.h>      /* for printf() and fprintf() */
 #include <sys/socket.h> /* for socket(), connect(), send(), and recv() */
 #include <arpa/inet.h>  /* for sockaddr_in and inet_addr() */
@@ -83,8 +79,6 @@ void ConnectToServer(char *hostname)
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
     // freeaddrinfo(addrList); // all done with this structure
-    // printf("\n");
-    // close(sock);
 }
 
 /*
@@ -93,69 +87,85 @@ void ConnectToServer(char *hostname)
  * @param {struct frame} Frame The frame structure for our packet
  * @param {int} frame_num The current frame number being sent
  */
-int SendFrame(struct frame Frame, int frame_num)
+int SendFrame(struct frame Frame, int frame_num, int length)
 {
-    char buffer[136];
-    char tempBuffer[136];
-    char tempBuffer2[134];
-    char error[2] = {0, 0};
-    char errorCheck[2] = {0, 0};
-    int i = 0;
+    char buffer[136];               /* Buffer to send frame */
+    char recvBuffer[136];           /* Buffer to receive ack */
+    char error[2] = {0, 0};         /* Error bytes */
+    char tempError[1];              /* Temporary buffer for flipping error bytes */
+    static int resendBreak = 0;     /* Used for debugging, if frame resent twice, something must have broke */
     int bufferLen, recvSize;
     uint16_t ack_seq_num;
 
-    *(uint16_t *) buffer = frame_seq_num;       /* Sequence number */
-    buffer[2] = Frame.frame_type;               /* Frame type */
-    buffer[3] = Frame.eop;                      /* End of Photo? */
-    memcpy(buffer + 4, Frame.datafield, 130);   /* Datafield */
-    CalculateError(buffer, error);
-    memcpy(buffer + 134, error, 2);             /* Error detection */
+    /* Put frame into buffer to send over */
+    *(uint16_t *) buffer = frame_seq_num;           /* Sequence number */
+    buffer[2] = Frame.frame_type;                   /* Frame type */
+    buffer[3] = Frame.eop;                          /* End of Photo? */
+    memcpy(buffer + 4, Frame.datafield, length);    /* Datafield */
+    CalculateError(buffer, error, length + 4);      
+    memcpy(buffer + (length + 4), error, 2);        /* Error detection */
 
-    bufferLen = sizeof(buffer);
+    /* Induce an error for every 6th frame */
+    // if((total_frames_sent + 1) % 6 == 0) {
+    //     tempError[0] = buffer[134];
+    //     buffer[134] = buffer[135];
+    //     buffer[135] = tempError[0];
+    // }
+    bufferLen = length + 6;
+
+    // printf("----%d---\n", bufferLen);
     // Use this format to extract the frame content
     // printf("%u", *(uint16_t *)buffer);
     // printf("%c", buffer[2]);
     // printf("%c", buffer[3]);
     // printf("%s", buffer + 4);
-    
+    // printf("%c - %c", error[0], error[1]);
+    // fflush(stdout);
+
     if (send(sockfd, buffer, bufferLen, 0) != bufferLen)
         DieWithSystemMessage("send() sent a different number of bytes than expected");
 
     while(1){
-        //     /* Receive message from server */
-        if ((recvSize = recv(sockfd, tempBuffer, RCVBUFSIZE, 0)) < 0) {
+        /* Receive message from server */
+        if ((recvSize = recv(sockfd, recvBuffer, RCVBUFSIZE, 0)) < 0) {
             /* Timeout, resend the same frame */
-            printf("Timed out\n");
-            printf("Resending frame\n");
+            resendBreak++;
+            if (resendBreak > 1)
+                exit(0);
             fprintf(f, "Timed out, resending frame\n");
             total_retransmitted_frames++;
             return -1;
             // DieWithSystemMessage("recv() failed");
         } else {
-            // printf("Received something\n");
-            memcpy(tempBuffer2, tempBuffer, 5);
-            CalculateError(tempBuffer2, errorCheck);
+            recvBuffer[recvSize] = '\0';
+            ack_seq_num = *(uint16_t *) recvBuffer;
             // There is an ACK error
-            if (!(error[0] == errorCheck[0] && error[1] == errorCheck[1])) {
-                fprintf(f, "Ack error\n");
+            if (frame_seq_num != ack_seq_num && recvBuffer[2] != PACKET_ACK) {
+                fprintf(f, "Ack error, resending frame\n");
+                if (resendBreak > 1)
+                    exit(0);
                 total_bad_acks++;
                 return -1;
-            }
-            ack_seq_num = *(uint16_t *) tempBuffer;
-            if(ack_seq_num == frame_seq_num) {
-                if(tempBuffer[2] == '1') {
+            } else {
+                if(recvBuffer[2] == FRAME_ACK) {
+                    /* Frame ack, send next frame */
                     total_frames_sent++;
                     total_good_acks++;
-                    fprintf(f, "Ack #%d received\n", ack_seq_num);
-                    return 1;           /* frame ack */
-                } else if (tempBuffer[2] == '2') {
+                    resendBreak = 0;
+                    fprintf(f, "Frame Ack #%d received\n", ack_seq_num);
+                    return 1;
+                } else if (recvBuffer[2] == PACKET_ACK) {
+                    /* Packet ack, send next packet */
                     total_frames_sent++;
                     total_good_acks++;
-                    fprintf(f, "Network Ack received\n");
-                    return 2;           /* network ack */
+                    resendBreak = 0;
+                    fprintf(f, "Packet Ack received\n");
+                    return 2;           
                 } else
+                    /* Unknown error */
+                    fprintf(f, "FT Ack error, resending frame\n");
                     total_bad_acks++;
-                    return -1;          /* unknown error */
+                    return -1;          
             }
         }
     }
@@ -167,15 +177,14 @@ int SendFrame(struct frame Frame, int frame_num)
  * @param {char *} buffer The buffer to send to the server
  * @param {char *} error The error detection bytes to set
  */
-void CalculateError(char *buffer, char *error)
+void CalculateError(char *buffer, char *error, int length)
 {
-    // LOOK INTO 135
     int i;
-    for (i = 0; i < sizeof(buffer); i+=2)
+    for (i = 0; i < length; i+=2)
     {
         error[0] ^= buffer[i];
     }
-    for (i = 1; i < sizeof(buffer); i+=2)
+    for (i = 1; i < length; i+=2)
     {
         error[1] ^= buffer[i];
     }

@@ -18,37 +18,51 @@ extern uint16_t frame_seq_num;
  */
 void CreateFrame(char *photo_buffer, int photo_size, int packet_num)
 {
-	int bytes_used = 0, resend_frame = 0;
+	int bytes_used = 0, resend_frame = 0, length = 0;
 	int i = -1;
+	int isEOPhoto = -1;
 	struct frame Frame;
 	memset(&Frame, 0, sizeof(Frame)); /* Zero out structure */
 
-	while(photo_size > 0) {
-		/* Construct the frame for transmission */
+	if (photo_size < 256)
+		isEOPhoto = 1;
+
+	/* Loop logic to put into frames and send to physical layer */
+	while(photo_size > 0 || resend_frame == 1) {
+		/* Construct the frame for transmission 
+			logic to resend the frame if an ack is bad */
 		if(resend_frame != 1) {
 			i++;
-			Frame.frame_type = '0';			/* 0 for frame, 1 for frame ack, 2 for packet ack */
-			/* 1 for EOP, 0 otherwise */
-			if(photo_size <= 0) 
-				Frame.eop = 'y';
-			else
-				Frame.eop = 'n';
-			strncpy(Frame.datafield, photo_buffer + bytes_used, 130);
+			Frame.frame_type = DATA_FRAME;
+			memset(Frame.datafield, 0, sizeof(Frame.datafield));
+			if (photo_size > 130) {
+				memcpy(Frame.datafield, photo_buffer + bytes_used, 130);
+				length = 130;
+			} else {
+				memcpy(Frame.datafield, photo_buffer + bytes_used, photo_size);
+				length = photo_size;
+			}
 			bytes_used = bytes_used + 130;
 			photo_size = photo_size - 130;
+			if (photo_size <= 0)
+				Frame.eop = EOPacket;
+			else
+				Frame.eop = '0';
+			if (isEOPhoto == 1)
+				Frame.eop = EOPhoto;
 		}
-		fprintf(f, "Frame #%d of packet #%d sent\n", i, packet_num);
+		fprintf(f, "Frame #%d of packet #%d sent\n", frame_seq_num, packet_num);
 		/* To physical layer */
-		if ((resend_frame = SendFrame(Frame, i)) == 1) {	
-			/* Frame successfully sent, send next frame */
+		if ((resend_frame = SendFrame(Frame, i, length)) == 1) {	
+			/* Frame successfully sent, send next frame */			
 			frame_seq_num += 1;
 			resend_frame = 0;
 		} else if (resend_frame == 2) {
 			/* Received network ack, proceed to next packet */
-			break;
+			frame_seq_num += 1;
+			return;
 		} else {
 			resend_frame = 1;
 		}
-		break;
 	}
 }
