@@ -13,22 +13,15 @@ int saveFrame(frame_ptr *frame_list, frame_ptr new_frame)
     else
     {
         frame_ptr current_frame = *frame_list;
+
         while(current_frame->next_frame != NULL)
         {
-            printf("seq %"PRIu16"\n", current_frame->seq);
             current_frame = current_frame->next_frame;
-            printf("loop after\n");
-            printf("seq %"PRIu16"\n", current_frame->seq);
-            fflush(stdout);
         }
 
-        printf("saving frame\n");
-        fflush(stdout);
         current_frame->next_frame = new_frame;
-        printf("saved frame\n");
     }
-    printf("returning\n");
-    fflush(stdout);
+
     return 0;
 }
 
@@ -39,7 +32,8 @@ int saveFrame(frame_ptr *frame_list, frame_ptr new_frame)
 frame_ptr parseFrame(char *input)
 {
     char *i = input;
-    frame_ptr frame = malloc(sizeof(frame));
+    frame_ptr new_frame = malloc(sizeof(frame));
+    // memset(new_frame, 0, sizeof(frame));
 
     if(numBytesRcvd < 7)
         return NULL;
@@ -47,30 +41,31 @@ frame_ptr parseFrame(char *input)
 
 
     // extract sequence number string and convert to int
-    memcpy(&frame->seq, i, 2);
+    memcpy(&new_frame->seq, i, 2);
     i += 2;
 
     printf("%u\n", *(uint16_t *)input);
     fflush(stdout);
 
-    memcpy(&frame->ft,  i++, 1); // frame type byte
-    memcpy(&frame->eop, i++, 1); // eop byte
+    memcpy(&new_frame->ft,  i++, 1); // frame type byte
+    memcpy(&new_frame->eop, i++, 1); // eop byte
 
 
     //extract data from frame
     int bytesLeft = numBytesRcvd - (i - input);
-    memcpy(&frame->data, i, bytesLeft - 2);
+    memcpy(&new_frame->data, i, bytesLeft - 2);
 
     i += bytesLeft - 2; // find beginning of ed
 
     // extract ed from frame and convert to int
-    memcpy(frame->ed, i, 2);
+    memcpy(new_frame->ed, i, 2);
 
 
-    frame->next_frame = NULL;
-    frame->data_length = bytesLeft - 2;
+    new_frame->next_frame = NULL;
+    new_frame->data_length = numBytesRcvd - 6;
+    printf("numBytesRcvd: %ld\n", numBytesRcvd);
 
-    return frame;
+    return new_frame;
 }
 
 
@@ -78,10 +73,25 @@ frame_ptr parseFrame(char *input)
 // recursively frees the frames
 void freeFrames(frame_ptr frames)
 {
-    frame_ptr current_frame = frames;
+    frame_ptr next;
 
-    if(current_frame->next_frame == NULL)
-        free(current_frame);
-    else
-        freeFrames(current_frame->next_frame);
+    while(frames)
+    {
+        next = frames;
+        frames = frames->next_frame;
+        free(next);
+    }
+    // if(frames->next_frame == NULL)
+    // {
+    //     free(frames);
+    //     printf("freed end frame\n");
+    // }
+    // else
+    // {
+    //     printf("calling freeFrames\n");
+    //     freeFrames(frames->next_frame);
+    //     printf("freeFrames returned\n");
+    //     free(frames);
+    //     printf("freed begin frame\n");
+    // }
 }

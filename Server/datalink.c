@@ -29,14 +29,12 @@ int toNetwork(frame_ptr frame_list, char eop, int clntSock, int client_id)
 {
     int  ibuf = 0;
     frame_ptr current_frame = frame_list;
-    packet_ptr packet = malloc(sizeof(packet));
+    packet_ptr new_packet = malloc(sizeof(packet));
 
     // take linked list of frames & put their data into a packet
-    if(current_frame == NULL)
-        printf("\n\n\n frame list is empty \n\n\n");
     while(current_frame)
     {
-        memcpy(packet->data + ibuf, current_frame->data, current_frame->data_length);
+        memcpy(new_packet->data + ibuf, current_frame->data, current_frame->data_length);
 
         ibuf += current_frame->data_length;
         printf("iBuf = %d\n", ibuf);
@@ -46,11 +44,12 @@ int toNetwork(frame_ptr frame_list, char eop, int clntSock, int client_id)
         current_frame = current_frame->next_frame;
     }
 
+    new_packet->data_length = ibuf;
 
-    uint16_t seq = networkPacket(packet, eop, client_id); // send packet to network
+    uint16_t seq = networkPacket(new_packet, eop, client_id); // send packet to network
     sendFrame(seq, ACK_PACKET ,clntSock);// send packet ack to physical layer
 
-    fprintf(log_file, "sent packet (%" PRIu16 ") to network layer\n", seq);
+    fprintf(log_file, "sent packet (%" PRIu16 ") to network layer\n\n", seq);
 
 
     return 0;
@@ -78,9 +77,12 @@ int processInput(char *input, int clntSock, int client_id)
 
     //if frame contains transmission errors
     CalculateError(input, error);
+    fprintf(log_file, "error: %c%c\n", error[0], error[1]);
+    fprintf(log_file, "ferror:%c%c\n", frame->ed[0], frame->ed[1]);
+    printf("error: %c%c\n", error[0], error[1]);
+    printf("ferror:%c%c\n", frame->ed[0], frame->ed[1]);
     if(frame->ed[0] != error[0] && frame->ed[1] != error[1])
     {
-        printf("Detected Transmission Error\n");
         fprintf(log_file, "transmission error detected\n");
         return -1; //break
     }
@@ -92,7 +94,6 @@ int processInput(char *input, int clntSock, int client_id)
     //if SEQ duplicate
     if(frame->seq == ((frameExpect - 1) % MAX_SEQ))
     {
-        printf("frame expect - 1: %"PRIu16"\n", frameExpect);
         sendFrame(frameExpect-1, ACK_FRAME, clntSock); //send ACK
         fprintf(log_file, "duplicate frame receivde #(%" PRIu16 ")\n", frame->seq);
     }
@@ -103,18 +104,19 @@ int processInput(char *input, int clntSock, int client_id)
     else if(frame->seq == frameExpect)//else if SEQ correct
     {
         fprintf(log_file, "frame #(%" PRIu16 ") received\n", frame->seq); // log it
-        printf("saving frame\n");
-        saveFrame(&frame_list, frame);                // save frame data
-        printf("saved frame\n");
-        bytesReceived += frame->data_length;         // track bytes received
-        printf("bytes of data Received: %d\n\n\n", bytesReceived);
+
+        saveFrame(&frame_list, frame);        // save frame to frame list
+        bytesReceived += frame->data_length;  // track bytes received
+        // printf("bytes of data Received: %d\n\n\n", bytesReceived);
 
         if(bytesReceived >= 256 || frame->eop > '0')
         {   // received entire packet
             // send packet to network layer
             fflush(stdout);
             toNetwork(frame_list, frame->eop, clntSock, client_id);
-            freeFrames(frame_list); // free used up frames
+            printf("freeing frames\n");
+            // freeFrames(frame_list); // free used up frames
+            printf("frames freed\n");
 
             frame = NULL;
             frame_list = NULL;
@@ -127,7 +129,7 @@ int processInput(char *input, int clntSock, int client_id)
 
 
         frameExpect = (frameExpect + 1);     // increment frame expected
-        printf("frame expected %" PRIu16 "\n", frameExpect);
+        printf("frameExpect: %" PRIu16 "\n", frameExpect);
     }
 
 
@@ -135,9 +137,13 @@ int processInput(char *input, int clntSock, int client_id)
 
     else
     {
-        printf("expected: %"PRIu16"\n received: %"PRIu16"\n", frameExpect, frame->seq);
         fprintf(log_file, "frame received in error #(%" PRIu16 ")\n", frame->seq);
     }
+
+    // printf("sequence number: %" PRIu16 "\n", frame_list->seq);
+    // printf("frame type:      %c\n", frame_list->ft);
+    // printf("end of packet:   %c\n", frame_list->eop);
+
 
     fflush(log_file);
     fflush(stdout);
