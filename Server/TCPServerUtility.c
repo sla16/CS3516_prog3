@@ -140,13 +140,13 @@ int sendFrame(uint16_t seq, char ft, int clntSock)
     // format message
     *(uint16_t *) buffer = seq;    /* Sequence number */
     buffer[2] = ft;               /* Frame type */
-    buffer[3] = seq;
-    buffer[4] = '\0';
+    *(uint16_t *)(buffer + 3) = seq;
+    buffer[5] = '\0';
 
 
     if(ft == ACK_FRAME)
     {
-        if((frame_num % 11) == 0)
+        if(((frame_num + 1) % 11) == 0)
         {
             buffer[3] ^= 0x7;
         }
