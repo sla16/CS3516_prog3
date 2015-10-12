@@ -1,10 +1,17 @@
+/*
+ * This is the physical layer. It is basically in charge of the connect, send and recv.
+ * The data link layer sends a frame down to this layer and it constructs that frame into
+ * a sendable buffer to the server. Then it receives and ack and depending on the ack, it will
+ * either send the next frame, resend the frame or proceed to the next packet.
+ */
+
 #include <stdio.h>      /* for printf() and fprintf() */
 #include <sys/socket.h> /* for socket(), connect(), send(), and recv() */
 #include <arpa/inet.h>  /* for sockaddr_in and inet_addr() */
 #include <stdlib.h>     /* for atoi() and exit() */
 #include <string.h>     /* for memset() */
 #include <unistd.h>     /* for close() */
-#include <fcntl.h>      /* File header */
+#include <fcntl.h>		/* File header */
 #include <sys/time.h>
 #include "header.h"
 
@@ -16,22 +23,24 @@ int total_good_acks = 0;
 int total_bad_acks = 0;
 
 /*
+ * @author Sam La
+ *
  * Connects the client to the server.
  *
  * @param {char*} hostname The machine name to connect to
  */
 void ConnectToServer(char *hostname)
 {
-    int sock, flags;                        /* Socket descriptor */
+	int sock, flags;                        /* Socket descriptor */
     struct addrinfo *p;              /* Struct of the addrinfo for hostname */
     struct timeval timeout;
-    int rtnVal;
+	int rtnVal;
 
     /* Sets 1 second timeout */
     timeout.tv_sec = 1;
     timeout.tv_usec = 0;
 
-    // Tell the system what kind(s) of address info we want
+	// Tell the system what kind(s) of address info we want
     struct addrinfo addrCriteria;                   // Criteria for address match
     memset(&addrCriteria, 0, sizeof(addrCriteria)); // Zero out structure
     addrCriteria.ai_family = AF_UNSPEC;             // Any address family
@@ -82,6 +91,8 @@ void ConnectToServer(char *hostname)
 }
 
 /*
+ * @author Sam La
+ *
  * Sends the frame received from the data link layer to the server data link layer
  *
  * @param {struct frame} Frame The frame structure for our packet
@@ -100,27 +111,19 @@ int SendFrame(struct frame Frame, int frame_num, int length)
     /* Put frame into buffer to send over */
     *(uint16_t *) buffer = frame_seq_num;           /* Sequence number */
     buffer[2] = Frame.frame_type;                   /* Frame type */
-    buffer[3] = Frame.eop;                          /* End of Photo? */
+    buffer[3] = Frame.eop;                          /* End of Photo */
     memcpy(buffer + 4, Frame.datafield, length);    /* Datafield */
     CalculateError(buffer, error, length + 4);      
     memcpy(buffer + (length + 4), error, 2);        /* Error detection */
 
     /* Induce an error for every 6th frame */
-    // if((total_frames_sent + 1) % 6 == 0) {
-    //     tempError[0] = buffer[134];
-    //     buffer[134] = buffer[135];
-    //     buffer[135] = tempError[0];
-    // }
+    if((total_frames_sent + 1) % 6 == 0) {
+        tempError[0] = buffer[134];
+        buffer[134] = buffer[135];
+        buffer[135] = tempError[0];
+    }
+    fprintf(f, "buffer[134]:%c buffer[135]:%c\n", buffer[134], buffer[135]);
     bufferLen = length + 6;
-
-    // printf("----%d---\n", bufferLen);
-    // Use this format to extract the frame content
-    // printf("%u", *(uint16_t *)buffer);
-    // printf("%c", buffer[2]);
-    // printf("%c", buffer[3]);
-    // printf("%s", buffer + 4);
-    // printf("%c - %c", error[0], error[1]);
-    // fflush(stdout);
 
     if (send(sockfd, buffer, bufferLen, 0) != bufferLen)
         DieWithSystemMessage("send() sent a different number of bytes than expected");
@@ -159,7 +162,7 @@ int SendFrame(struct frame Frame, int frame_num, int length)
                     total_frames_sent++;
                     total_good_acks++;
                     resendBreak = 0;
-                    fprintf(f, "Packet Ack received\n");
+                    fprintf(f, "Packet Ack received\n\n");
                     return 2;           
                 } else
                     /* Unknown error */
@@ -172,6 +175,8 @@ int SendFrame(struct frame Frame, int frame_num, int length)
 }
 
 /*
+ * @author Sam La
+ *
  * XOR the buffer content to get error detection
  *
  * @param {char *} buffer The buffer to send to the server

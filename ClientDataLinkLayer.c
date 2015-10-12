@@ -1,3 +1,10 @@
+/*
+ * This is the data link layer. This part takes in the 256 byte chunk (or less) from the
+ * network layer and puts it into a frame.
+ * After putting it into a frame, it sends it down to the physical layer to be sent over
+ * to the server.
+ */
+
 #include <stdio.h>      /* for printf() and fprintf() */
 #include <sys/socket.h> /* for socket(), connect(), send(), and recv() */
 #include <arpa/inet.h>  /* for sockaddr_in and inet_addr() */
@@ -10,6 +17,8 @@
 extern uint16_t frame_seq_num;
 
 /*
+ * @author Sam La
+ *
  * Constructs the frame from the packet
  *
  * @param {char *} photo_buffer The 1-256 byte chunk of the photo (from the Network Layer)

@@ -1,3 +1,8 @@
+/* @author Sam La 
+ * A header file containing definitions and struct information as well as function prototypes.
+ */
+
+
 #include <sys/socket.h> /* for socket(), connect(), send(), and recv() */
 #include <stdio.h>
 #include <stdlib.h>     /* for atoi() and exit() */
@@ -26,8 +31,8 @@ struct addrinfo {
 };
 
 struct frame {
-    uint16_t    seq_num;
-    char        frame_type;
+	uint16_t    seq_num;
+	char        frame_type;
     char        eop;
     char        datafield[130];
     char        ed[2];          
@@ -37,8 +42,8 @@ struct frame {
 FILE *f;
 
 void DieWithSystemMessage(char *errorMessage);  /* Error handling function */
-void ReadPhotoFile(int, int);
-void ConnectToServer(char *);
-void CreateFrame(char*, int, int);
-int SendFrame(struct frame, int, int);
-void CalculateError(char *, char *, int);
+void ReadPhotoFile(int, int);                   /* Reads in photos and splits into 256 byte chunk */
+void ConnectToServer(char *);                   /* Connects to the server */
+void CreateFrame(char*, int, int);              /* Constructs a frame from the 256 byte chunk */
+int SendFrame(struct frame, int, int);          /* Handles communication with the server */
+void CalculateError(char *, char *, int);       /* Handles calculating for error detection through XOR */
