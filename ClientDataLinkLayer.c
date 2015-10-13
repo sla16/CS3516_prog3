@@ -33,11 +33,11 @@ void CreateFrame(char *photo_buffer, int photo_size, int packet_num)
 	struct frame Frame;
 	memset(&Frame, 0, sizeof(Frame)); /* Zero out structure */
 
-	if (photo_size < 256)
+	if (photo_size == 0)
 		isEOPhoto = 1;
 
 	/* Loop logic to put into frames and send to physical layer */
-	while(photo_size > 0 || resend_frame == 1) {
+	while(photo_size >= 0 || resend_frame == 1) {
 		/* Construct the frame for transmission 
 			logic to resend the frame if an ack is bad */
 		if(resend_frame != 1) {
@@ -57,8 +57,11 @@ void CreateFrame(char *photo_buffer, int photo_size, int packet_num)
 				Frame.eop = EOPacket;
 			else
 				Frame.eop = '0';
-			if (isEOPhoto == 1)
+			if (isEOPhoto == 1) {
+				printf("end of photo\n");
 				Frame.eop = EOPhoto;
+				length = 0;
+			}
 		}
 		fprintf(f, "Frame #%d of packet #%d sent\n", frame_seq_num, packet_num);
 		/* To physical layer */
@@ -73,5 +76,7 @@ void CreateFrame(char *photo_buffer, int photo_size, int packet_num)
 		} else {
 			resend_frame = 1;
 		}
+	if (isEOPhoto == 1)
+		break;
 	}
 }

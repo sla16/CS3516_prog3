@@ -46,4 +46,5 @@ void ReadPhotoFile(int, int);                   /* Reads in photos and splits in
 void ConnectToServer(char *);                   /* Connects to the server */
 void CreateFrame(char*, int, int);              /* Constructs a frame from the 256 byte chunk */
 int SendFrame(struct frame, int, int);          /* Handles communication with the server */
+int ReceiveAck();                               /* Handles communication from the server */
 void CalculateError(char *, char *, int);       /* Handles calculating for error detection through XOR */

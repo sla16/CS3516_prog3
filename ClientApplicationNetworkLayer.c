@@ -84,9 +84,10 @@ void ReadPhotoFile(int client_id, int num_photo)
     char photo_path[50];
     char photo_buffer[256];
 
-    // sprintf(photo_path, "photo%d%d.jpg", client_id, num_photo);
-    printf("Please enter a photo to upload: ");
-    scanf("%s", &photo_path);
+    sprintf(photo_path, "photo%d%d.jpg", client_id, num_photo);
+    // COMMENT OUT THE sprintf AND UNCOMMENT BELOW TO TEST SPECIFIC FILES
+    // printf("Please enter a photo to upload: ");
+    // scanf("%s", &photo_path);
 
     if ((photo_file = open(photo_path, O_RDONLY)) < 0) {
         DieWithSystemMessage("open() failed");
@@ -94,16 +95,19 @@ void ReadPhotoFile(int client_id, int num_photo)
     }
 
     /* Read the photo in 256 byte chunks, send to datalink layer to put into frames */
-    while((photo_size = read(photo_file, photo_buffer, 256)) > 0) {
+    while((photo_size = read(photo_file, photo_buffer, 256)) > -1) {
         fprintf(f, "Packet #%d sent\n", i);
         CreateFrame(photo_buffer, photo_size, i);
         i++;
+        if (photo_size == 0)
+            break;
     }
 
     if(photo_size < 0) {
         DieWithSystemMessage("read() failed");
         exit(1);
     } else {
-        printf("Reached the end of the file\n");
+        printf("Finished sending photo #%d\n", num_photo);
+        fprintf(f, "Photo #%d sent successfully.\n", num_photo);
     }
 }

@@ -37,8 +37,8 @@ void ConnectToServer(char *hostname)
 	int rtnVal;
 
     /* Sets 1 second timeout */
-    timeout.tv_sec = 1;
-    timeout.tv_usec = 0;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 500000;
 
 	// Tell the system what kind(s) of address info we want
     struct addrinfo addrCriteria;                   // Criteria for address match
@@ -51,7 +51,7 @@ void ConnectToServer(char *hostname)
     struct addrinfo *addrList;                      // Holder for list of addresses returned
 
     // Use the default port 5000 as a check if no port was actually given
-    if ((rtnVal = getaddrinfo(hostname, "5001", &addrCriteria, &addrList)) != 0)
+    if ((rtnVal = getaddrinfo(hostname, "5000", &addrCriteria, &addrList)) != 0)
     {
         DieWithUserMessage("getaddrinfo() failed", gai_strerror(rtnVal));
     }
@@ -101,40 +101,50 @@ void ConnectToServer(char *hostname)
 int SendFrame(struct frame Frame, int frame_num, int length)
 {
     char buffer[136];               /* Buffer to send frame */
-    char recvBuffer[136];           /* Buffer to receive ack */
     char error[2] = {0, 0};         /* Error bytes */
     char tempError[1];              /* Temporary buffer for flipping error bytes */
-    static int resendBreak = 0;     /* Used for debugging, if frame resent twice, something must have broke */
-    int bufferLen, recvSize;
-    uint16_t ack_seq_num;
+    int bufferLen;
 
     /* Put frame into buffer to send over */
     *(uint16_t *) buffer = frame_seq_num;           /* Sequence number */
     buffer[2] = Frame.frame_type;                   /* Frame type */
     buffer[3] = Frame.eop;                          /* End of Photo */
     memcpy(buffer + 4, Frame.datafield, length);    /* Datafield */
-    CalculateError(buffer, error, length + 4);      
+    CalculateError(buffer, error, length + 4);
     memcpy(buffer + (length + 4), error, 2);        /* Error detection */
 
-    /* Induce an error for every 6th frame */
-    if((total_frames_sent + 1) % 6 == 0) {
-        tempError[0] = buffer[134];
-        buffer[134] = buffer[135];
-        buffer[135] = tempError[0];
+    /* Induce an error for every 6th frame by flipping bits */
+    if(((total_frames_sent + 1) % 6) == 0) {
+        error[0] = buffer[135];
+        error[1] = buffer[134];
+        memcpy(buffer + (length + 4), error, 2);
     }
-    fprintf(f, "buffer[134]:%c buffer[135]:%c\n", buffer[134], buffer[135]);
+
     bufferLen = length + 6;
 
     if (send(sockfd, buffer, bufferLen, 0) != bufferLen)
         DieWithSystemMessage("send() sent a different number of bytes than expected");
 
+    return ReceiveAck();
+}
+
+/*
+ * @author Sam La
+ *
+ * This handles receiving and handling acks from the server
+ */
+int ReceiveAck()
+{
+    char recvBuffer[136];           /* Buffer to receive ack */
+    uint16_t ack_seq_num;
+    uint16_t error_num;
+    int recvSize;
+    static int x = 0;
+
     while(1){
+        total_frames_sent++;
         /* Receive message from server */
         if ((recvSize = recv(sockfd, recvBuffer, RCVBUFSIZE, 0)) < 0) {
-            /* Timeout, resend the same frame */
-            resendBreak++;
-            if (resendBreak > 1)
-                exit(0);
             fprintf(f, "Timed out, resending frame\n");
             total_retransmitted_frames++;
             return -1;
@@ -142,26 +152,26 @@ int SendFrame(struct frame Frame, int frame_num, int length)
         } else {
             recvBuffer[recvSize] = '\0';
             ack_seq_num = *(uint16_t *) recvBuffer;
+            error_num = *(uint16_t *) (recvBuffer + 3);
             // There is an ACK error
-            if (frame_seq_num != ack_seq_num && recvBuffer[2] != PACKET_ACK) {
+            if ((frame_seq_num != ack_seq_num && recvBuffer[2] != PACKET_ACK) || ack_seq_num != error_num) {
+                x++;
                 fprintf(f, "Ack error, resending frame\n");
-                if (resendBreak > 1)
-                    exit(0);
+                total_retransmitted_frames++;
                 total_bad_acks++;
+                if(x > 10)
+                    exit(1);
                 return -1;
             } else {
+                x = 0;
                 if(recvBuffer[2] == FRAME_ACK) {
                     /* Frame ack, send next frame */
-                    total_frames_sent++;
                     total_good_acks++;
-                    resendBreak = 0;
                     fprintf(f, "Frame Ack #%d received\n", ack_seq_num);
                     return 1;
                 } else if (recvBuffer[2] == PACKET_ACK) {
                     /* Packet ack, send next packet */
-                    total_frames_sent++;
                     total_good_acks++;
-                    resendBreak = 0;
                     fprintf(f, "Packet Ack received\n\n");
                     return 2;           
                 } else
