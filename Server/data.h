@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <inttypes.h>
 
-#define EO_PHOTO 2
-#define EO_PACKET 1
+#define EO_PHOTO '2'
+#define EO_PACKET '1'
 
 #define DATA_FRAME 0
 #define ACK_FRAME  '1'
@@ -27,6 +27,7 @@ struct Frame {
 
 struct Packet {
     char data[256];
+    int  data_length;
     struct Packet *next_packet;
 };
 
@@ -48,7 +49,7 @@ frame_ptr parseFrame(char *input);
 // recursively frees frames
 void freeFrames(frame_ptr frames);
 // network layer: accepts packet and EOP indicator
-uint16_t networkPacket(packet_ptr new_packet, int eop, int client_id);
+uint16_t networkPacket(packet_ptr new_packet, char eop, int client_id);
 
 
 #endif

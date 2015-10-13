@@ -99,8 +99,12 @@ int AcceptTCPConnection(int servSock) {
 void HandleTCPClient(int clntSocket, int client_id)
 {
     char buffer[BUFSIZE]; // Buffer for echo string
-    log_file = fopen("log_file.log", "w");
-    numBytesRcvd = recv(clntSocket, buffer, BUFSIZE, 0);
+
+    char logname[16];
+    sprintf(logname, "log_file%03d.log", client_id);
+    log_file = fopen(logname, "w"); //open log file
+
+    numBytesRcvd = recv(clntSocket, buffer, BUFSIZE, 0); // receive first frame
 
     while (numBytesRcvd > 0)
     {
@@ -115,6 +119,7 @@ void HandleTCPClient(int clntSocket, int client_id)
 
         buffer[numBytesRcvd] = '\0';
         processInput(buffer, clntSocket, client_id);
+        printf("process input returns\n\n\n\n");
 
         numBytesRcvd = recv(clntSocket, buffer, BUFSIZE, 0);
         if (numBytesRcvd < 0)
@@ -130,12 +135,23 @@ int sendFrame(uint16_t seq, char ft, int clntSock)
 {
     char buffer[10];
     ssize_t numBytesSent;
+    static int frame_num = 0;
 
     // format message
     *(uint16_t *) buffer = seq;    /* Sequence number */
     buffer[2] = ft;               /* Frame type */
-    buffer[3] = seq;
-    buffer[4] = '\0';
+    *(uint16_t *)(buffer + 3) = seq;
+    buffer[5] = '\0';
+
+
+    if(ft == ACK_FRAME)
+    {
+        if(((frame_num + 1) % 11) == 0)
+        {
+            buffer[3] ^= 0x7;
+        }
+        frame_num++;
+    }
 
 
     // send message
